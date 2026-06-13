@@ -6,13 +6,18 @@ import math
 @dataclass
 class Position:
     direction: str          # "long" or "short"
-    entry_price: float
-    shares: int
+    entry_price: float      # first-tranche fill price (kept for initial_stop reference)
+    shares: int             # total shares across all tranches
     initial_stop: float
     current_stop: float
     entry_bar: int          # bar index at entry
     breakeven_set: bool = False
-    tranches: int = 1       # how many scale-ins have fired
+    tranches: int = 1       # tranches fired so far (1 after initial entry)
+    cost_basis: float = 0.0 # sum(fill_i * shares_i) across all tranches
+
+    @property
+    def avg_entry_price(self) -> float:
+        return self.cost_basis / self.shares if self.shares > 0 else self.entry_price
 
 
 @dataclass
@@ -75,7 +80,16 @@ class Portfolio:
             initial_stop=initial_stop,
             current_stop=initial_stop,
             entry_bar=bar_idx,
+            cost_basis=cost,
         )
+
+    def add_tranche(self, fill_price: float, add_shares: int, commission: float):
+        cost = fill_price * add_shares
+        self.cash -= cost + commission
+        pos = self.position
+        pos.cost_basis += cost
+        pos.shares += add_shares
+        pos.tranches += 1
 
     def close_position(self, fill_price: float, bar_idx: int,
                        exit_reason: str, commission: float, slippage_cost: float):
@@ -85,7 +99,7 @@ class Portfolio:
 
         trade = Trade(
             direction=pos.direction,
-            entry_price=pos.entry_price,
+            entry_price=pos.avg_entry_price,
             exit_price=fill_price,
             shares=pos.shares,
             entry_bar=pos.entry_bar,

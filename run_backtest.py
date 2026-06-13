@@ -9,6 +9,8 @@ Usage:
     python run_backtest.py --ema                # use EMA instead of SMA
     python run_backtest.py --regime             # enable market regime gate (§5.1)
     python run_backtest.py --universe           # enable universe filter (§5.2)
+    python run_backtest.py --rs                 # enable RS filter vs benchmark (§5.3)
+    python run_backtest.py --scaling            # enable tiered scale-in 50/30/20% (§4.2)
 """
 
 import argparse
@@ -25,6 +27,7 @@ from backtest.engine import run_backtest
 from backtest.report import build_report, build_bh_return, print_report, compare_is_oos
 from strategy.regime import build_regime_series, join_regime
 from strategy.universe import add_universe_filter
+from strategy.rs import add_rs
 
 
 def parse_args():
@@ -41,6 +44,8 @@ def parse_args():
     p.add_argument("--risk",      type=float, default=STRATEGY.max_risk_pct, help="Risk per trade (fraction)")
     p.add_argument("--regime",    action="store_true", help="Enable market regime gate (§5.1)")
     p.add_argument("--universe",  action="store_true", help="Enable universe filter: price>$0.50, vol>500k (§5.2)")
+    p.add_argument("--rs",        action="store_true", help="Enable RS filter vs benchmark (§5.3)")
+    p.add_argument("--scaling",   action="store_true", help="Enable tiered scale-in 50/30/20%% (§4.2)")
     return p.parse_args()
 
 
@@ -54,6 +59,8 @@ def main():
         profit_target_r=args.target,
         use_regime_gate=args.regime,
         use_universe_filter=args.universe,
+        use_rs_filter=args.rs,
+        use_scaling=args.scaling,
     )
 
     bt = BacktestConfig(
@@ -79,6 +86,12 @@ def main():
         df = join_regime(df, regime)
         counts = df["regime"].value_counts()
         print(f"  Regime gate: {counts.to_dict()}")
+
+    if strat.use_rs_filter:
+        df_bench = load_ohlcv(bt.benchmark, bt.start_date, bt.end_date)
+        df = add_rs(df, df_bench, strat)
+        rs_pct = (df["rs"] > 0).mean()
+        print(f"  RS filter ({bt.benchmark}, {strat.rs_lookback}d): {rs_pct:.1%} of bars outperform")
 
     # In-sample / out-of-sample split
     split = int(len(df) * strat.in_sample_pct)
