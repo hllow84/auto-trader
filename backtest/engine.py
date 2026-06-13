@@ -22,6 +22,14 @@ def run_backtest(df_raw: pd.DataFrame, strat: StrategyConfig, bt: BacktestConfig
     """
     df = add_indicators(df_raw, strat)
     df = add_signals(df, strat)
+
+    # Provide defaults so the loop body never needs to branch on whether
+    # the regime gate or universe filter is active.
+    if "regime" not in df.columns:
+        df["regime"] = "bullish"
+    if "passes_filter" not in df.columns:
+        df["passes_filter"] = True
+
     df = df.reset_index(drop=True)
 
     port = Portfolio(bt.initial_capital)
@@ -141,20 +149,31 @@ def run_backtest(df_raw: pd.DataFrame, strat: StrategyConfig, bt: BacktestConfig
         # 3. Set up new pending entry orders for the NEXT bar                 #
         # ------------------------------------------------------------------ #
         if port.position is None:
-            # Cancel stale pending orders if trend condition broke
-            if pending_long is not None and not (row["ma_fast"] > row["ma_slow"]):
-                pending_long = None
-            if pending_short is not None and not (row["ma_fast"] < row["ma_slow"]):
-                pending_short = None
+            regime = row["regime"]
+            passes = row["passes_filter"]
 
-            if row["long_signal"]:
+            # Cancel stale pending orders if trend breaks OR (gate active) regime flips
+            if pending_long is not None:
+                trend_broke  = not (row["ma_fast"] > row["ma_slow"])
+                regime_flip  = strat.use_regime_gate and regime == "bearish"
+                if trend_broke or regime_flip:
+                    pending_long = None
+            if pending_short is not None:
+                trend_broke  = not (row["ma_fast"] < row["ma_slow"])
+                regime_flip  = strat.use_regime_gate and regime == "bullish"
+                if trend_broke or regime_flip:
+                    pending_short = None
+
+            long_allowed  = passes and (not strat.use_regime_gate or regime != "bearish")
+            short_allowed = passes and (not strat.use_regime_gate or regime != "bullish")
+
+            if row["long_signal"] and long_allowed:
                 new_buy_stop = row["high"] + tick
                 initial_stop = row["low"] - tick
-                # Trailing: update if already have a pending order
                 pending_long = {"stop": new_buy_stop, "initial_stop": initial_stop}
                 pending_short = None
 
-            elif row["short_signal"]:
+            elif row["short_signal"] and short_allowed:
                 new_sell_stop = row["low"] - tick
                 initial_stop = row["high"] + tick
                 pending_short = {"stop": new_sell_stop, "initial_stop": initial_stop}

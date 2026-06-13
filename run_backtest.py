@@ -7,6 +7,8 @@ Usage:
     python run_backtest.py --ticker AAPL --start 2015-01-01 --end 2023-12-31
     python run_backtest.py --target 2.0         # enable 2R profit target
     python run_backtest.py --ema                # use EMA instead of SMA
+    python run_backtest.py --regime             # enable market regime gate (§5.1)
+    python run_backtest.py --universe           # enable universe filter (§5.2)
 """
 
 import argparse
@@ -21,6 +23,8 @@ from config import StrategyConfig, BacktestConfig, STRATEGY, BACKTEST
 from data.fetch import load_ohlcv
 from backtest.engine import run_backtest
 from backtest.report import build_report, build_bh_return, print_report, compare_is_oos
+from strategy.regime import build_regime_series, join_regime
+from strategy.universe import add_universe_filter
 
 
 def parse_args():
@@ -35,6 +39,8 @@ def parse_args():
     p.add_argument("--shorts",    action="store_true", help="Enable short trades (default off)")
     p.add_argument("--cci",       type=int, default=STRATEGY.cci_period, help="CCI period")
     p.add_argument("--risk",      type=float, default=STRATEGY.max_risk_pct, help="Risk per trade (fraction)")
+    p.add_argument("--regime",    action="store_true", help="Enable market regime gate (§5.1)")
+    p.add_argument("--universe",  action="store_true", help="Enable universe filter: price>$0.50, vol>500k (§5.2)")
     return p.parse_args()
 
 
@@ -46,6 +52,8 @@ def main():
         cci_period=args.cci,
         max_risk_pct=args.risk,
         profit_target_r=args.target,
+        use_regime_gate=args.regime,
+        use_universe_filter=args.universe,
     )
 
     bt = BacktestConfig(
@@ -59,6 +67,18 @@ def main():
     print(f"\nLoading data: {bt.ticker} {bt.start_date} to {bt.end_date}")
     df = load_ohlcv(bt.ticker, bt.start_date, bt.end_date)
     print(f"  {len(df)} trading days loaded.")
+
+    # Optional layers — applied before IS/OOS split so both halves share the same columns
+    if strat.use_universe_filter:
+        df = add_universe_filter(df, strat)
+        pct = df["passes_filter"].mean()
+        print(f"  Universe filter: {pct:.1%} of bars pass (price>${strat.min_price}, vol>{strat.min_avg_volume:,})")
+
+    if strat.use_regime_gate:
+        regime = build_regime_series(bt.start_date, bt.end_date, strat, bt.data_dir)
+        df = join_regime(df, regime)
+        counts = df["regime"].value_counts()
+        print(f"  Regime gate: {counts.to_dict()}")
 
     # In-sample / out-of-sample split
     split = int(len(df) * strat.in_sample_pct)

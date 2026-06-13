@@ -42,8 +42,19 @@ class StrategyConfig:
     # --- Phase 1: Market regime gate ---
     use_regime_gate: bool = False
     regime_threshold: float = 0.50   # >50% green → bullish
+    regime_indices: list = field(default_factory=lambda: [
+        "^GSPC",   # S&P 500
+        "^NDX",    # Nasdaq 100
+        "^DJI",    # Dow Jones
+        "^FTSE",   # FTSE 100
+        "^GDAXI",  # DAX
+        "^N225",   # Nikkei 225
+        "^HSI",    # Hang Seng
+        "^STI",    # STI
+    ])
 
     # --- Phase 2: Universe filter ---
+    use_universe_filter: bool = False
     min_price: float = 0.50
     min_avg_volume: int = 500_000
 
