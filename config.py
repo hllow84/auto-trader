@@ -29,6 +29,9 @@ class StrategyConfig:
     # --- Stops ---
     breakeven_trigger: float = 1.05  # raise stop to entry once price >= entry * 1.05
     time_stop_days: int = 5          # exit at next open if still open on day 5
+    # ATR-based initial stop: None = bar low/high (default); float = N × ATR(atr_period) from entry
+    atr_period: int = 14
+    stop_atr_mult: Optional[float] = None
 
     # --- Profit target ---
     # None = no fixed target (exits governed by stops only)

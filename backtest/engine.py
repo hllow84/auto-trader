@@ -217,11 +217,21 @@ def run_backtest(df_raw: pd.DataFrame, strat: StrategyConfig, bt: BacktestConfig
             )
 
             if row["long_signal"] and long_allowed:
-                pending_long  = {"stop": row["high"] + tick, "initial_stop": row["low"] - tick}
+                entry = row["high"] + tick
+                if strat.stop_atr_mult is not None and not pd.isna(row.get("atr", float("nan"))):
+                    istop = entry - strat.stop_atr_mult * row["atr"]
+                else:
+                    istop = row["low"] - tick
+                pending_long  = {"stop": entry, "initial_stop": istop}
                 pending_short = None
 
             elif row["short_signal"] and short_allowed:
-                pending_short = {"stop": row["low"] - tick, "initial_stop": row["high"] + tick}
+                entry = row["low"] - tick
+                if strat.stop_atr_mult is not None and not pd.isna(row.get("atr", float("nan"))):
+                    istop = entry + strat.stop_atr_mult * row["atr"]
+                else:
+                    istop = row["high"] + tick
+                pending_short = {"stop": entry, "initial_stop": istop}
                 pending_long  = None
 
         # ------------------------------------------------------------------ #

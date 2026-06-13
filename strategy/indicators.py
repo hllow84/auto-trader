@@ -4,7 +4,7 @@ from config import StrategyConfig
 
 
 def add_indicators(df: pd.DataFrame, cfg: StrategyConfig) -> pd.DataFrame:
-    """Add MA20, MA40, and CCI columns to an OHLCV DataFrame (in-place copy)."""
+    """Add MA20, MA40, CCI, and ATR columns to an OHLCV DataFrame (in-place copy)."""
     df = df.copy()
 
     if cfg.ma_type == "EMA":
@@ -15,7 +15,16 @@ def add_indicators(df: pd.DataFrame, cfg: StrategyConfig) -> pd.DataFrame:
         df["ma_slow"] = df["close"].rolling(cfg.ma_slow).mean()
 
     df["cci"] = _cci(df, cfg.cci_period)
+    df["atr"] = _atr(df, cfg.atr_period)
     return df
+
+
+def _atr(df: pd.DataFrame, period: int) -> pd.Series:
+    hl  = df["high"] - df["low"]
+    hpc = (df["high"] - df["close"].shift(1)).abs()
+    lpc = (df["low"]  - df["close"].shift(1)).abs()
+    tr  = pd.concat([hl, hpc, lpc], axis=1).max(axis=1)
+    return tr.rolling(period).mean()
 
 
 def _cci(df: pd.DataFrame, period: int) -> pd.Series:

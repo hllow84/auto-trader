@@ -46,6 +46,7 @@ def parse_args():
     p.add_argument("--universe",  action="store_true", help="Enable universe filter: price>$0.50, vol>500k (§5.2)")
     p.add_argument("--rs",        action="store_true", help="Enable RS filter vs benchmark (§5.3)")
     p.add_argument("--scaling",   action="store_true", help="Enable tiered scale-in 50/30/20%% (§4.2)")
+    p.add_argument("--stop-atr",  type=float, default=None, help="ATR multiplier for initial stop (e.g. 1.5)")
     return p.parse_args()
 
 
@@ -61,6 +62,7 @@ def main():
         use_universe_filter=args.universe,
         use_rs_filter=args.rs,
         use_scaling=args.scaling,
+        stop_atr_mult=args.stop_atr,
     )
 
     bt = BacktestConfig(
