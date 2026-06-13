@@ -36,8 +36,10 @@ DEFAULT_UNIVERSE = [
 
 def parse_args():
     p = argparse.ArgumentParser(description="MA-CCI universe scanner")
-    p.add_argument("--tickers",   nargs="+", default=None,
+    p.add_argument("--tickers",      nargs="+", default=None,
                    help="Tickers to scan (default: built-in 50-stock universe)")
+    p.add_argument("--tickers-file", default=None,
+                   help="Path to a file with one ticker per line")
     p.add_argument("--start",     default="2023-01-01",
                    help="History start date for indicator warmup")
     p.add_argument("--end",       default=str(date.today()),
@@ -116,7 +118,12 @@ def _print_signals(signals: list[dict], direction: str, top: int | None):
 
 def main():
     args = parse_args()
-    tickers = args.tickers or DEFAULT_UNIVERSE
+
+    if args.tickers_file:
+        with open(args.tickers_file) as f:
+            tickers = [line.strip().upper() for line in f if line.strip() and not line.startswith("#")]
+    else:
+        tickers = args.tickers or DEFAULT_UNIVERSE
 
     strat = StrategyConfig(
         ma_type="EMA" if args.ema else "SMA",
